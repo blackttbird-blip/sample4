@@ -25,7 +25,7 @@ st.set_page_config(
     layout="centered",
 )
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-3.8-flash"
 MAX_TURNS = 5
 
 DATA_DIR = Path("data")

@@ -1,3 +1,5 @@
 streamlit
-openai
+google-genai
+pypdf
+python-docx
 Pillow

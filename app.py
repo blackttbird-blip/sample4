@@ -64,11 +64,103 @@ def client():
     )
 
 
+import time
+
+
 def ask_gemini(
     prompt,
     search=False,
     temperature=0.3,
 ):
+    """
+    Gemini 호출 함수
+    - 503 과부하 오류가 나면 자동 재시도
+    - 1초 → 2초 → 4초 간격으로 최대 3회 재시도
+    """
+
+    def run_request(use_search):
+        if use_search:
+            config = types.GenerateContentConfig(
+                temperature=temperature,
+                tools=[
+                    types.Tool(
+                        google_search=types.GoogleSearch()
+                    )
+                ],
+            )
+        else:
+            config = types.GenerateContentConfig(
+                temperature=temperature
+            )
+
+        return client().models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=config,
+        )
+
+    delays = [1, 2, 4]
+
+    # 먼저 Google Search 포함 호출 시도
+    if search:
+        for attempt, delay in enumerate(delays, start=1):
+            try:
+                response = run_request(True)
+
+                return (
+                    (response.text or "").strip(),
+                    True,
+                    None,
+                )
+
+            except Exception as e:
+                error_text = str(e)
+
+                # 503이면 자동 재시도
+                if (
+                    "503" in error_text
+                    or "UNAVAILABLE" in error_text
+                    or "high demand" in error_text.lower()
+                ):
+                    if attempt < len(delays):
+                        time.sleep(delay)
+                        continue
+
+                # 검색 기능 자체가 실패하면
+                # 검색 없이 Gemini 기본 호출로 넘어감
+                search_error = error_text
+                break
+
+        else:
+            search_error = "Google Search 호출 실패"
+
+    else:
+        search_error = None
+
+    # 검색 없이 기본 Gemini 호출
+    for attempt, delay in enumerate(delays, start=1):
+        try:
+            response = run_request(False)
+
+            return (
+                (response.text or "").strip(),
+                False,
+                search_error,
+            )
+
+        except Exception as e:
+            error_text = str(e)
+
+            if (
+                "503" in error_text
+                or "UNAVAILABLE" in error_text
+                or "high demand" in error_text.lower()
+            ):
+                if attempt < len(delays):
+                    time.sleep(delay)
+                    continue
+
+            raise e
 
     """
     search=True이면 Google Search를 먼저 사용한다.
